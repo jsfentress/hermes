@@ -1,7 +1,6 @@
 {
-  "name": "hermes-salesloft",
+  "name": "hermes-salesloft-cadence-direct",
   "version": "1.0.0",
-  "description": "Netlify function for pushing cadences to Salesloft",
   "dependencies": {
     "node-fetch": "^2.6.7"
   }

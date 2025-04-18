@@ -5,7 +5,7 @@ exports.handler = async function(event, context) {
   const apiKey = event.headers.authorization;
 
   try {
-    const response = await fetch("https://api.salesloft.com/v2/cadence_imports.json", {
+    const response = await fetch("https://api.salesloft.com/v2/cadences.json", {
       method: "POST",
       headers: {
         "Authorization": apiKey,
