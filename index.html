@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CSV to Salesloft JSON</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2em; max-width: 800px; margin: auto; }
+    input, button, textarea { width: 100%; margin: 0.5em 0; padding: 0.5em; font-size: 1em; }
+    pre { background: #f5f5f5; padding: 1em; overflow-x: auto; }
+    .status { font-weight: bold; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>CSV to Salesloft JSON</h1>
+  <input type="file" id="file-input" accept=".csv" />
+  <button id="parse-btn">Parse CSV</button>
+  <p id="filename" style="font-style: italic; color: gray;"></p>
+
+  <input type="text" id="cadence-name" placeholder="Cadence Name (e.g., Genworth)" />
+  <input type="text" id="api-key" placeholder="Salesloft API Key (saved in browser)" />
+
+  <button id="download-btn">Download JSON</button>
+  <button id="push-btn">Push to Salesloft</button>
+
+  <div class="status" id="status"></div>
+  <pre id="output"></pre>
+
+  <script>
+    let selectedFile = null;
+    let jsonData = null;
+
+    document.getElementById("file-input").addEventListener("change", function(e) {
+      selectedFile = e.target.files[0];
+      document.getElementById("filename").textContent = selectedFile ? `Selected: ${selectedFile.name}` : "";
+    });
+
+    function groupByDay(rows) {
+      const grouped = {};
+      for (const row of rows) {
+        const day = parseInt(row.day, 10);
+        if (!grouped[day]) {
+          grouped[day] = {
+            day,
+            step_group_title: row.step_group_title,
+            steps: []
+          };
+        }
+        grouped[day].steps.push({
+          enabled: true,
+          name: row.step_title,
+          type: "Email",
+          type_settings: {
+            previous_email_step_group_reference_id: null,
+            email_template: {
+              title: row.step_title,
+              subject: row.subject || "",
+              body: `<p>${row.body_text?.split("\n").join("</p><p>")}</p>`
+            }
+          }
+        });
+      }
+      return Object.values(grouped).map(group => ({
+        automated_settings: {},
+        automated: false,
+        day: group.day,
+        due_immediately: false,
+        reference_id: Math.floor(Math.random() * 1e7),
+        steps: group.steps
+      }));
+    }
+
+    function buildSalesloftJSON(stepGroups) {
+      const name = document.getElementById("cadence-name").value || "My Cadence";
+      return {
+        settings: {
+          name,
+          target_daily_people: 0,
+          remove_replied: true,
+          remove_bounced: true,
+          remove_people_when_meeting_booked: true,
+          external_identifier: "",
+          cadence_function: "outbound"
+        },
+        sharing_settings: {
+          team_cadence: false,
+          shared: true
+        },
+        step_groups: stepGroups
+      };
+    }
+
+    document.getElementById("parse-btn").addEventListener("click", function() {
+      if (!selectedFile) {
+        document.getElementById("status").textContent = "⚠️ Please select a CSV file first.";
+        document.getElementById("status").style.color = "orange";
+        return;
+      }
+
+      Papa.parse(selectedFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          const rows = results.data;
+          console.log("🧮 Parsed rows via PapaParse:", rows);
+          if (!rows.length) {
+            document.getElementById("status").textContent = "⚠️ No rows found in CSV.";
+            document.getElementById("status").style.color = "orange";
+            return;
+          }
+          const stepGroups = groupByDay(rows);
+          jsonData = buildSalesloftJSON(stepGroups);
+          document.getElementById("output").textContent = JSON.stringify(jsonData, null, 2);
+          document.getElementById("status").textContent = "✅ CSV parsed successfully.";
+          document.getElementById("status").style.color = "green";
+        },
+        error: function(err) {
+          console.error("❌ CSV parse error:", err);
+          document.getElementById("status").textContent = "❌ CSV parse error. Check console.";
+          document.getElementById("status").style.color = "red";
+        }
+      });
+    });
+
+    document.getElementById("download-btn").addEventListener("click", function() {
+      if (jsonData) {
+        const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "salesloft_cadence.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    });
+
+    document.getElementById("push-btn").addEventListener("click", async function() {
+      if (!jsonData) return;
+      const apiKey = document.getElementById("api-key").value;
+      const res = await fetch("/.netlify/functions/salesloft", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + apiKey,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(jsonData)
+      });
+
+      const status = document.getElementById("status");
+      if (res.ok) {
+        status.textContent = "✅ Successfully pushed to Salesloft!";
+        status.style.color = "green";
+      } else {
+        const msg = await res.text();
+        status.textContent = "❌ Error: " + msg;
+        status.style.color = "red";
+      }
+    });
+  </script>
+</body>
+</html>
