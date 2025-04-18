@@ -24,6 +24,10 @@
   <button id="download-btn">Download JSON</button>
   <button id="push-btn">Push to Salesloft</button>
 
+  <button id="copy-curl-btn">Copy curl Command</button>
+  <button id="copy-postman-btn">Copy Postman JSON</button>
+
+
   <div class="status" id="status"></div>
   <pre id="output"></pre>
 
@@ -157,6 +161,29 @@
         status.style.color = "red";
       }
     });
-  </script>
+  
+    document.getElementById("copy-curl-btn").addEventListener("click", function() {
+      if (!jsonData) return;
+      const apiKey = document.getElementById("api-key").value.trim();
+      const curl = [
+        "curl -X POST https://api.salesloft.com/v2/cadence_imports.json \\",
+        "  -H \"Authorization: Bearer " + apiKey + "\" \\",
+        "  -H \"Content-Type: application/json\" \\",
+        "  -d '" + JSON.stringify(jsonData).replace(/'/g, "\'") + "'"
+      ].join("\n");
+      navigator.clipboard.writeText(curl).then(() => {
+        document.getElementById("status").textContent = "📋 curl command copied to clipboard.";
+        document.getElementById("status").style.color = "blue";
+      });
+    });
+
+    document.getElementById("copy-postman-btn").addEventListener("click", function() {
+      if (!jsonData) return;
+      navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2)).then(() => {
+        document.getElementById("status").textContent = "📋 Postman JSON copied to clipboard.";
+        document.getElementById("status").style.color = "blue";
+      });
+    });
+</script>
 </body>
 </html>
